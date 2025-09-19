@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WorkSpaces Login</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f9fc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    #app {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      width: 400px;
+    }
+    h2 {
+      margin-top: 0;
+      color: #0073bb;
+      text-align: center;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #0073bb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #005f9e;
+    }
+    #status {
+      margin-top: 15px;
+      font-size: 14px;
+      text-align: center;
+      color: #444;
+    }
+    #regCodeBox {
+      margin-top: 15px;
+      padding: 10px;
+      background: #f0f4f8;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      text-align: center;
+      display: none;
+    }
+    #copyLink {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 13px;
+      color: #0073bb;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h2>WorkSpaces Login</h2>
+
+    <div id="loginForm">
+      <input type="text" id="username" placeholder="Username" required />
+      <input type="password" id="password" placeholder="Password" required />
+      <button id="loginBtn">Login</button>
+    </div>
+
+    <div id="launcher" style="display:none;">
+      <p>Welcome, <span id="displayUser"></span>!</p>
+      <div id="regCodeBox">
+        <strong>Registration Code:</strong> 
+        <span id="regCodeValue"></span>
+        <div id="copyLink">Copy Code</div>
+      </div>
+      <button id="launchBtn">Launch WorkSpace Web Client</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const mockUser = { username: "workspace", password: "Welcome123!" };
+
+    async function mockAuthenticate(username, password) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          if (username === mockUser.username && password === mockUser.password) {
+            resolve(true);
+          } else {
+            reject("Invalid credentials");
+          }
+        }, 800);
+      });
+    }
+
+    async function getRegistrationCode() {
+      const response = await fetch("http://localhost:4000/api/getRegCode");
+      if (!response.ok) throw new Error("Failed to fetch reg code");
+      const data = await response.json();
+      return data.registrationCode;
+    }
+
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const status = document.getElementById("status");
+
+      status.textContent = "Authenticating...";
+
+      try {
+        await mockAuthenticate(username, password);
+        status.textContent = "Login successful! Fetching reg code...";
+
+        const regCode = await getRegistrationCode();
+        sessionStorage.setItem("regCode", regCode);
+        sessionStorage.setItem("username", username);
+
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("launcher").style.display = "block";
+        document.getElementById("displayUser").textContent = username;
+        document.getElementById("regCodeValue").textContent = regCode;
+        document.getElementById("regCodeBox").style.display = "block";
+
+        status.textContent = "Ready to launch.";
+      } catch (err) {
+        status.textContent = "Login failed: " + err;
+      }
+    });
+
+    document.getElementById("copyLink").addEventListener("click", () => {
+      const regCode = sessionStorage.getItem("regCode");
+      if (regCode) {
+        navigator.clipboard.writeText(regCode).then(() => {
+          alert("Registration Code copied to clipboard!");
+        });
+      }
+    });
+
+    document.getElementById("launchBtn").addEventListener("click", () => {
+      const regCode = sessionStorage.getItem("regCode");
+      const status = document.getElementById("status");
+
+      if (!regCode) {
+        status.textContent = "No registration code found. Please log in again.";
+        return;
+      }
+
+      const launchUrl = `https://client.workspaces.aws/?registrationCode=${encodeURIComponent(regCode)}`;
+      status.textContent = "Launching WorkSpaces Web Client...";
+      window.open(launchUrl, "_blank");
+    });
+  </script>
+</body>
+</html>
