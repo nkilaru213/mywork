@@ -1,88 +1,78 @@
-<#
-  Copyright (c) 2025
-#>
-
 $ErrorActionPreference = 'Stop'
 
-function Write-Header {
+function Header {
     Write-Host "========================================" -ForegroundColor Cyan
 }
 
-Write-Header
+Header
 Write-Host "Ordem - Service Ordering Tool" -ForegroundColor Cyan
-Write-Header
+Header
 Write-Host ""
 
-# -----------------------------------------------------------------------------
-# Windows check (safe for all PowerShell versions)
-# -----------------------------------------------------------------------------
 if ($env:OS -ne "Windows_NT") {
-    Write-Error "This application only runs on Windows."
+    Write-Error "Windows only"
     exit 1
 }
 
-# -----------------------------------------------------------------------------
-# Paths
-# -----------------------------------------------------------------------------
 $scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backendDir = Join-Path $scriptDir "dist\backend"
 $uiDir      = Join-Path $scriptDir "ui"
 $distUiDir  = Join-Path $scriptDir "dist\ui"
 
-$bind = "127.0.0.1:4000"
-$EndpointUrl = "http://$bind"
+$EndpointUrl = "http://127.0.0.1:4000"
 
-# -----------------------------------------------------------------------------
-# Helper: open browser
-# -----------------------------------------------------------------------------
-function Open-Browser {
-    param ([string]$Url)
-
+function Open-Browser($Url) {
     try {
         Start-Process $Url
-        Write-Host "Opened browser at: $Url" -ForegroundColor Green
-    }
-    catch {
-        Write-Warning "Could not open browser automatically. Open manually: $Url"
+    } catch {
+        Write-Warning "Open browser manually: $Url"
     }
 }
 
-# -----------------------------------------------------------------------------
-# Detect dev environment
-# -----------------------------------------------------------------------------
-$isDevEnvironment = Test-Path (Join-Path $scriptDir "ui\package.json")
+$isDevEnvironment = Test-Path (Join-Path $uiDir "package.json")
 
 if ($isDevEnvironment) {
 
-    Write-Host "Development environment detected." -ForegroundColor Cyan
-    Write-Host ""
+    Write-Host "Development environment detected" -ForegroundColor Cyan
 
-    # Check npm
     if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-        Write-Error "npm is required. Install Node.js from https://nodejs.org/"
+        Write-Error "npm not found"
         exit 1
     }
 
-    # Check cargo
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        Write-Error "cargo is required. Install Rust from https://rustup.rs/"
+        Write-Error "cargo not found"
         exit 1
     }
 
-    Write-Host "✓ npm found" -ForegroundColor Green
-    Write-Host "✓ cargo found" -ForegroundColor Green
-    Write-Host ""
-
-    # Install UI deps if needed
-    $nodeModulesPath = Join-Path $uiDir "node_modules"
-    if (-not (Test-Path $nodeModulesPath)) {
-        Write-Host "Installing UI dependencies..." -ForegroundColor Yellow
+    $nodeModules = Join-Path $uiDir "node_modules"
+    if (-not (Test-Path $nodeModules)) {
         Push-Location $uiDir
         npm install --omit=dev
         Pop-Location
     }
 
-    # Check build artifacts
-    $needsBuild = $false
+    $backendExeList = Get-ChildItem $backendDir -Filter "*.exe" -ErrorAction SilentlyContinue
+    $uiBundleExists = Test-Path (Join-Path $distUiDir "bundle.js")
 
-    if (-not (Get-ChildItem $backendDir -Filter "*.exe" -ErrorAction Silentl*
+    if (-not $backendExeList -or -not $uiBundleExists) {
+        $buildScript = Join-Path $scriptDir "scripts\build-all.ps1"
+        & $buildScript
+    }
+}
+
+$backendExe = Get-ChildItem $backendDir -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+if (-not $backendExe) {
+    Write-Error "Backend executable not found"
+    exit 1
+}
+
+Header
+Write-Host "Server starting on port 4000" -ForegroundColor Cyan
+Header
+Write-Host "Open browser: $EndpointUrl" -ForegroundColor Green
+Write-Host ""
+
+Open-Browser $EndpointUrl
+& $backendExe.FullName
